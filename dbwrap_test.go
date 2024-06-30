@@ -1,14 +1,13 @@
 package bgscheduler
 
 import (
-	"log"
 	"os"
 	"path"
 	"testing"
 	"time"
 )
 
-func TestDbWrap_Basic(t *testing.T) {
+func TestDbWrap_LastLaunch(t *testing.T) {
 	dbDir := createDbPath(t)
 	defer rmDb(t, dbDir)
 
@@ -17,7 +16,20 @@ func TestDbWrap_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Println(db)
+	now := time.Now()
+	err = db.SetLastLaunch("SomeTask", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tm, err := db.GetLastLaunch("SomeTask")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if now.Sub(*tm) > time.Second {
+		t.Errorf("times doesn't match: now=%s, res=%s", now, tm)
+	}
 }
 
 func createDbPath(t *testing.T) string {

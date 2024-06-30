@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -32,16 +33,48 @@ func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbW
 	var err error
 	r.db, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil, errors.Join(SchedulerError, errors.New("unable to create DB connection"), err)
+		return nil, errors.Join(errors.New("unable to create DB connection"), err)
 	}
 	r.Persistent = true
 
 	err = r.initSchema()
 	if err != nil {
-		return nil, errors.Join(SchedulerError, errors.New("unable to init DB schema"), err)
+		return nil, errors.Join(errors.New("unable to init DB schema"), err)
 	}
 
 	return r, nil
+}
+
+func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
+	ts := lastLaunch.Unix()
+
+	ctx, cancel := r.context()
+	defer cancel()
+
+	_, err := r.db.ExecContext(ctx, "REPLACE INTO LastLaunches (TaskName, Ts) VALUES (?, ?)", taskName, ts)
+	if err != nil {
+		return errors.Join(fmt.Errorf("unable to set last call time for %s", taskName), err)
+	}
+
+	return nil
+}
+
+func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
+	ctx, cancel := r.context()
+	defer cancel()
+
+	res := r.db.QueryRowContext(ctx, "SELECT Ts FROM LastLaunches WHERE TaskName=?", taskName)
+	if err := res.Err(); err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
+	}
+
+	var ts int64
+	if err := res.Scan(&ts); err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
+	}
+
+	tm := time.Unix(ts, 0)
+	return &tm, nil
 }
 
 func (r *dbWrap) initSchema() error {
@@ -52,7 +85,7 @@ func (r *dbWrap) initSchema() error {
 		`
 		CREATE TABLE IF NOT EXISTS LastLaunches (
 		    TaskName TEXT NOT NULL PRIMARY KEY,
-		    LastCallTime INTEGER NOT NULL
+		    Ts INTEGER NOT NULL
 		)
 		`,
 		`

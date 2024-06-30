@@ -15,6 +15,9 @@ type dbWrap struct {
 	db           *sql.DB
 	logger       *logWrap
 	queryTimeout time.Duration
+
+	setLastLaunchQuery *sql.Stmt
+	getLastLaunchQuery *sql.Stmt
 }
 
 func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbWrap, error) {
@@ -42,6 +45,11 @@ func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbW
 		return nil, errors.Join(errors.New("unable to init DB schema"), err)
 	}
 
+	err = r.prepareQueries()
+	if err != nil {
+		return nil, errors.Join(errors.New("unable to prepare DB queries"), err)
+	}
+
 	return r, nil
 }
 
@@ -51,7 +59,7 @@ func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
 	ctx, cancel := r.context()
 	defer cancel()
 
-	_, err := r.db.ExecContext(ctx, "REPLACE INTO LastLaunches (TaskName, Ts) VALUES (?, ?)", taskName, ts)
+	_, err := r.setLastLaunchQuery.ExecContext(ctx, taskName, ts)
 	if err != nil {
 		return errors.Join(fmt.Errorf("unable to set last call time for %s", taskName), err)
 	}
@@ -63,7 +71,7 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 	ctx, cancel := r.context()
 	defer cancel()
 
-	res := r.db.QueryRowContext(ctx, "SELECT Ts FROM LastLaunches WHERE TaskName=?", taskName)
+	res := r.getLastLaunchQuery.QueryRowContext(ctx, taskName)
 	if err := res.Err(); err != nil {
 		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
 	}
@@ -123,6 +131,28 @@ func (r *dbWrap) initSchema() error {
 		}
 		return err
 	}
+	return nil
+}
+
+func (r *dbWrap) prepareQueries() error {
+	ctx, cancel := r.context()
+	defer cancel()
+
+	var st *sql.Stmt
+	var err error
+
+	st, err = r.db.PrepareContext(ctx, "REPLACE INTO LastLaunches (TaskName, Ts) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	r.setLastLaunchQuery = st
+
+	st, err = r.db.PrepareContext(ctx, "SELECT Ts FROM LastLaunches WHERE TaskName=?")
+	if err != nil {
+		return err
+	}
+	r.getLastLaunchQuery = st
+
 	return nil
 }
 

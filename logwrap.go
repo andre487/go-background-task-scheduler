@@ -15,6 +15,10 @@ func (t *logWrap) Error(format string, v ...any) {
 	t.log(LogLevelError, format, v...)
 }
 
+func (t *logWrap) Warn(format string, v ...any) {
+	t.log(LogLevelWarn, format, v...)
+}
+
 func (t *logWrap) Info(format string, v ...any) {
 	t.log(LogLevelInfo, format, v...)
 }

@@ -5,26 +5,19 @@ import (
 	"testing"
 )
 
-type logStubCall struct {
-	format string
-	v      []interface{}
-}
-
-type logStub struct {
-	calls []logStubCall
-}
-
 func TestLogWrap_Debug(t *testing.T) {
 	lStub := &logStub{}
 	lWrap := newLogWrap(lStub, LogLevelDebug)
 
 	lWrap.Error("Bad thing: %s", "all have failed!")
+	lWrap.Warn("Bad thing, but let it be: %s", "something has failed!")
 	lWrap.Info("Something important: %s\n", "some task finished with result 0")
 	lWrap.Debug("Something needed only for debug: %s", "TaskId=487")
 
 	lCalls := lStub.Calls()
 	expectedLines := []string{
 		"ERROR Bad thing: all have failed!\n",
+		"WARN Bad thing, but let it be: something has failed!\n",
 		"INFO Something important: some task finished with result 0\n",
 		"DEBUG Something needed only for debug: TaskId=487\n",
 	}

@@ -11,10 +11,10 @@ import (
 )
 
 type dbWrap struct {
-	Persistent   bool
 	db           *sql.DB
 	logger       *logWrap
 	queryTimeout time.Duration
+	persistent   bool
 
 	setLastLaunchQuery      *sql.Stmt
 	getLastLaunchQuery      *sql.Stmt
@@ -25,9 +25,10 @@ type dbWrap struct {
 func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbWrap, error) {
 	if queryTimeout < 500*time.Millisecond {
 		queryTimeout = 500 * time.Millisecond
+		logger.Debug("DB query timeout fell back to %s", queryTimeout)
 	}
 	r := &dbWrap{
-		Persistent:   false,
+		persistent:   false,
 		logger:       logger,
 		queryTimeout: queryTimeout,
 	}
@@ -40,7 +41,7 @@ func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbW
 	if err != nil {
 		return nil, errors.Join(errors.New("unable to create DB connection"), err)
 	}
-	r.Persistent = true
+	r.persistent = true
 
 	err = r.initSchema()
 	if err != nil {
@@ -55,7 +56,26 @@ func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbW
 	return r, nil
 }
 
+func (r *dbWrap) Close() {
+	if r.db == nil {
+		return
+	}
+	err := r.db.Close()
+	if err != nil {
+		r.logger.Warn("Error when closing DB: %s", err)
+	}
+}
+
+func (r *dbWrap) Persistent() bool {
+	return r.persistent
+}
+
 func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
+	if !r.persistent {
+		r.logger.Warn("DB is not persistent, not exec SetLastLaunch")
+		return nil
+	}
+
 	ts := lastLaunch.Unix()
 
 	ctx, cancel := r.context()
@@ -70,6 +90,11 @@ func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
 }
 
 func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
+	if !r.persistent {
+		r.logger.Warn("DB is not persistent, not exec GetLastLaunch")
+		return &zeroTime, nil
+	}
+
 	ctx, cancel := r.context()
 	defer cancel()
 
@@ -80,6 +105,9 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 
 	var ts int64
 	if err := res.Scan(&ts); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &zeroTime, nil
+		}
 		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
 	}
 
@@ -88,6 +116,11 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 }
 
 func (r *dbWrap) SetExactTimeConfig(taskName string, tm ExactLaunchTime) error {
+	if !r.persistent {
+		r.logger.Warn("DB is not persistent, not exec SetExactTimeConfig")
+		return nil
+	}
+
 	ctx, cancel := r.context()
 	defer cancel()
 
@@ -100,6 +133,11 @@ func (r *dbWrap) SetExactTimeConfig(taskName string, tm ExactLaunchTime) error {
 }
 
 func (r *dbWrap) GetExactTimeConfig(taskName string) (*ExactLaunchTime, error) {
+	if !r.persistent {
+		r.logger.Warn("DB is not persistent, not exec GetExactTimeConfig")
+		return nil, nil
+	}
+
 	ctx, cancel := r.context()
 	defer cancel()
 
@@ -110,15 +148,19 @@ func (r *dbWrap) GetExactTimeConfig(taskName string) (*ExactLaunchTime, error) {
 
 	var tm ExactLaunchTime
 	if err := res.Scan(&tm.Hour, &tm.Minute, &tm.Second); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, errors.Join(fmt.Errorf("unable to get exact time config for %s", taskName), err)
 	}
 	return &tm, nil
 }
 
 func (r *dbWrap) initSchema() error {
-	if !r.Persistent {
+	if !r.persistent {
 		return nil
 	}
+
 	initQueries := []string{
 		`
 		CREATE TABLE IF NOT EXISTS LastLaunches (
@@ -164,6 +206,10 @@ func (r *dbWrap) initSchema() error {
 }
 
 func (r *dbWrap) prepareQueries() error {
+	if !r.persistent {
+		return nil
+	}
+
 	ctx, cancel := r.context()
 	defer cancel()
 

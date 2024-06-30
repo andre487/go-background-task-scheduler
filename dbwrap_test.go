@@ -1,19 +1,24 @@
 package bgscheduler
 
 import (
-	"os"
-	"path"
 	"testing"
 	"time"
 )
 
 func TestDbWrap_LastLaunch(t *testing.T) {
 	dbPath := createDbPath(t)
-	defer rmDb(t, dbPath)
 
 	db, err := newDbWrap(dbPath, createLogger(), 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	tm, err := db.GetLastLaunch("SomeTask")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tm.Year() != 1970 {
+		t.Errorf("unexpected default time: %s", tm)
 	}
 
 	now := time.Now()
@@ -22,7 +27,7 @@ func TestDbWrap_LastLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tm, err := db.GetLastLaunch("SomeTask")
+	tm, err = db.GetLastLaunch("SomeTask")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +39,15 @@ func TestDbWrap_LastLaunch(t *testing.T) {
 
 func TestDbWrap_ExactTimeConfig(t *testing.T) {
 	dbPath := createDbPath(t)
-	defer rmDb(t, dbPath)
 
 	db, err := newDbWrap(dbPath, createLogger(), 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	tConf, err := db.GetExactTimeConfig("SomeTask")
+	if tConf != nil {
+		t.Errorf("unexpected default exec time config: %v", tConf)
 	}
 
 	conf := ExactLaunchTime{Hour: -1, Minute: 0, Second: 30}
@@ -47,32 +56,12 @@ func TestDbWrap_ExactTimeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tm, err := db.GetExactTimeConfig("SomeTask")
+	tConf, err = db.GetExactTimeConfig("SomeTask")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !conf.Equals(*tm) {
-		t.Errorf("configs doesn't match: original=%+v, fromQuery=%+v", conf, tm)
+	if !conf.Equals(*tConf) {
+		t.Errorf("configs doesn't match: original=%+v, fromQuery=%+v", conf, tConf)
 	}
-}
-
-func createDbPath(t *testing.T) string {
-	dbDir, err := os.MkdirTemp(os.TempDir(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return path.Join(dbDir, "db.sqlite")
-}
-
-func rmDb(t *testing.T, dbPath string) {
-	dbDir := path.Dir(dbPath)
-	err := os.RemoveAll(dbDir)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func createLogger() *logWrap {
-	return newLogWrap(nil, LogLevelDebug)
 }

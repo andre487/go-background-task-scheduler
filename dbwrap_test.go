@@ -8,10 +8,10 @@ import (
 )
 
 func TestDbWrap_LastLaunch(t *testing.T) {
-	dbDir := createDbPath(t)
-	defer rmDb(t, dbDir)
+	dbPath := createDbPath(t)
+	defer rmDb(t, dbPath)
 
-	db, err := newDbWrap(dbDir, createLogger(), 10*time.Second)
+	db, err := newDbWrap(dbPath, createLogger(), 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,10 +33,10 @@ func TestDbWrap_LastLaunch(t *testing.T) {
 }
 
 func TestDbWrap_ExactTimeConfig(t *testing.T) {
-	dbDir := createDbPath(t)
-	defer rmDb(t, dbDir)
+	dbPath := createDbPath(t)
+	defer rmDb(t, dbPath)
 
-	db, err := newDbWrap(dbDir, createLogger(), 10*time.Second)
+	db, err := newDbWrap(dbPath, createLogger(), 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

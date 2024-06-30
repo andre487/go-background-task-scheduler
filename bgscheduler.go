@@ -5,19 +5,14 @@ import (
 	"log"
 )
 
-type Logger interface {
-	Printf(format string, v ...any)
+type ExactLaunchTime struct {
+	Hour   int
+	Minute int
+	Second int
 }
 
-type Config struct {
-	Logger   Logger
-	LogLevel LogLevel
-	DbPath   string
-}
-
-type Scheduler struct {
-	logger *logWrap
-	db     *sql.DB
+func (r *ExactLaunchTime) Equals(other ExactLaunchTime) bool {
+	return other.Hour == r.Hour && other.Minute == r.Minute && other.Second == r.Second
 }
 
 type LogLevel int
@@ -37,6 +32,21 @@ func (t LogLevel) String() string {
 	default:
 		return "ERROR"
 	}
+}
+
+type Logger interface {
+	Printf(format string, v ...any)
+}
+
+type Config struct {
+	Logger   Logger
+	LogLevel LogLevel
+	DbPath   string
+}
+
+type Scheduler struct {
+	logger *logWrap
+	db     *sql.DB
 }
 
 func NewBgScheduler(conf *Config) (*Scheduler, error) {

@@ -16,8 +16,10 @@ type dbWrap struct {
 	logger       *logWrap
 	queryTimeout time.Duration
 
-	setLastLaunchQuery *sql.Stmt
-	getLastLaunchQuery *sql.Stmt
+	setLastLaunchQuery      *sql.Stmt
+	getLastLaunchQuery      *sql.Stmt
+	setExactTimeConfigQuery *sql.Stmt
+	getExactTimeConfigQuery *sql.Stmt
 }
 
 func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbWrap, error) {
@@ -85,6 +87,34 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 	return &tm, nil
 }
 
+func (r *dbWrap) SetExactTimeConfig(taskName string, tm ExactLaunchTime) error {
+	ctx, cancel := r.context()
+	defer cancel()
+
+	_, err := r.setExactTimeConfigQuery.ExecContext(ctx, taskName, tm.Hour, tm.Minute, tm.Second)
+	if err != nil {
+		return errors.Join(fmt.Errorf("unable to set exact time config for %s", taskName), err)
+	}
+
+	return nil
+}
+
+func (r *dbWrap) GetExactTimeConfig(taskName string) (*ExactLaunchTime, error) {
+	ctx, cancel := r.context()
+	defer cancel()
+
+	res := r.getExactTimeConfigQuery.QueryRowContext(ctx, taskName)
+	if err := res.Err(); err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to get exact time config for %s", taskName), err)
+	}
+
+	var tm ExactLaunchTime
+	if err := res.Scan(&tm.Hour, &tm.Minute, &tm.Second); err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to get exact time config for %s", taskName), err)
+	}
+	return &tm, nil
+}
+
 func (r *dbWrap) initSchema() error {
 	if !r.Persistent {
 		return nil
@@ -104,7 +134,6 @@ func (r *dbWrap) initSchema() error {
 		    Second INTEGER NOT NULL
 		)
 		`,
-		`CREATE INDEX IF NOT EXISTS ExecTime ON ExactTimeConfigs (Hour, Minute, Second)`,
 	}
 
 	ctx, cancel := r.context()
@@ -152,6 +181,18 @@ func (r *dbWrap) prepareQueries() error {
 		return err
 	}
 	r.getLastLaunchQuery = st
+
+	st, err = r.db.PrepareContext(ctx, "REPLACE INTO ExactTimeConfigs (TaskName, Hour, Minute, Second) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	r.setExactTimeConfigQuery = st
+
+	st, err = r.db.PrepareContext(ctx, "SELECT Hour, Minute, Second FROM ExactTimeConfigs WHERE TaskName=?")
+	if err != nil {
+		return err
+	}
+	r.getExactTimeConfigQuery = st
 
 	return nil
 }

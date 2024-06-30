@@ -32,6 +32,31 @@ func TestDbWrap_LastLaunch(t *testing.T) {
 	}
 }
 
+func TestDbWrap_ExactTimeConfig(t *testing.T) {
+	dbDir := createDbPath(t)
+	defer rmDb(t, dbDir)
+
+	db, err := newDbWrap(dbDir, createLogger(), 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := ExactLaunchTime{Hour: -1, Minute: 0, Second: 30}
+	err = db.SetExactTimeConfig("SomeTask", conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tm, err := db.GetExactTimeConfig("SomeTask")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !conf.Equals(*tm) {
+		t.Errorf("configs doesn't match: original=%+v, fromQuery=%+v", conf, tm)
+	}
+}
+
 func createDbPath(t *testing.T) string {
 	dbDir, err := os.MkdirTemp(os.TempDir(), "")
 	if err != nil {

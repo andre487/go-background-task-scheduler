@@ -15,12 +15,19 @@ func (r *ExactLaunchTime) Equals(other ExactLaunchTime) bool {
 	return other.Hour == r.Hour && other.Minute == r.Minute && other.Second == r.Second
 }
 
-type LogLevel int
+type LogLevel uint32
 
+// Same uint32 values that in Logrus
+//
+//goland:noinspection GoUnusedConst
 const (
-	LogLevelError LogLevel = iota
+	LogLevelPanic LogLevel = iota
+	LogLevelFatal
+	LogLevelError
+	LogLevelWarn
 	LogLevelInfo
 	LogLevelDebug
+	LogLevelTrace
 )
 
 func (t LogLevel) String() string {

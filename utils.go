@@ -7,7 +7,8 @@ import (
 
 const zeroYear = 1970
 
-var zeroTime = time.Date(zeroYear, 1, 1, 0, 0, 0, 0, time.UTC)
+// ZeroTime is the time that handled as an empty value
+var ZeroTime = time.Date(zeroYear, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func must0(err error) {
 	if err != nil {

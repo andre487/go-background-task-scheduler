@@ -80,7 +80,7 @@ func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
 func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 	if !r.persistent {
 		r.logger.Warn("DB is not persistent, not exec GetLastLaunch")
-		return &zeroTime, nil
+		return &ZeroTime, nil
 	}
 
 	var byteRes []byte
@@ -97,7 +97,7 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 	}
 
 	if byteRes == nil {
-		return &zeroTime, nil
+		return &ZeroTime, nil
 	}
 
 	var ts int64

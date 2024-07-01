@@ -4,16 +4,22 @@ import (
 	"time"
 )
 
+// ExactLaunchTime describes the exact time for execution.
+// If Hour defined, a task will be executed daily in that Hour:Minute:Second.
+// For skipping Hour (hourly execution) it should be set as -1.
+// Minute and Second have the same semantics.
 type ExactLaunchTime struct {
 	Hour   int
 	Minute int
 	Second int
 }
 
+// Equals shows are instances equal or not
 func (r *ExactLaunchTime) Equals(other ExactLaunchTime) bool {
 	return other.Hour == r.Hour && other.Minute == r.Minute && other.Second == r.Second
 }
 
+// Zero shows that all time params are -1 (all parts are skipped)
 func (r *ExactLaunchTime) Zero() bool {
 	return r.Hour == -1 && r.Minute == -1 && r.Second == -1
 }

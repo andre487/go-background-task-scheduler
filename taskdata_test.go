@@ -29,7 +29,7 @@ func TestExactTimeTaskData_Init_Daily(t *testing.T) {
 		Hour:   timeSecondBefore.Hour(),
 		Minute: timeSecondBefore.Minute(),
 		Second: timeSecondBefore.Second(),
-	}, task, &zeroTime)
+	}, task, &ZeroTime)
 
 	if td.TimeToLaunch != 0 {
 		t.Errorf("unexpected time for launch after ancient times: %s", td.TimeToLaunch)
@@ -83,7 +83,7 @@ func TestExactTimeTaskData_Init_Hourly(t *testing.T) {
 		Hour:   -1,
 		Minute: timeSecondBefore.Minute(),
 		Second: timeSecondBefore.Second(),
-	}, task, &zeroTime)
+	}, task, &ZeroTime)
 
 	if td.TimeToLaunch != 0 {
 		t.Errorf("unexpected time for launch after ancient times: %s", td.TimeToLaunch)
@@ -136,7 +136,7 @@ func TestExactTimeTaskData_Init_Minutely(t *testing.T) {
 		Hour:   -1,
 		Minute: -1,
 		Second: timeSecondBefore.Second(),
-	}, task, &zeroTime)
+	}, task, &ZeroTime)
 
 	if td.TimeToLaunch != 0 {
 		t.Errorf("unexpected time for launch after ancient times: %s", td.TimeToLaunch)
@@ -159,7 +159,7 @@ func TestExactTimeTaskData_Update_Reset(t *testing.T) {
 		Hour:   -1,
 		Minute: -1,
 		Second: time.Now().Add(time.Second).Second(),
-	}, task, &zeroTime)
+	}, task, &ZeroTime)
 
 	if (td.TimeToLaunch - time.Second).Abs() > time.Minute {
 		t.Fatalf("unexpected time for launch in the future: %s", td.TimeToLaunch)

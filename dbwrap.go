@@ -1,59 +1,50 @@
 package bgscheduler
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"go.etcd.io/bbolt"
 )
 
 type dbWrap struct {
-	db           *sql.DB
+	db           *bbolt.DB
 	logger       *logWrap
 	queryTimeout time.Duration
 	persistent   bool
-
-	setLastLaunchQuery      *sql.Stmt
-	getLastLaunchQuery      *sql.Stmt
-	setExactTimeConfigQuery *sql.Stmt
-	getExactTimeConfigQuery *sql.Stmt
 }
+
+var lastLaunchTimeBucket = []byte("lastLaunchTime")
 
 func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbWrap, error) {
 	if queryTimeout < 500*time.Millisecond {
 		queryTimeout = 500 * time.Millisecond
 		logger.Debug("DB query timeout fell back to %s", queryTimeout)
 	}
-	r := &dbWrap{
+	t := &dbWrap{
 		persistent:   false,
 		logger:       logger,
 		queryTimeout: queryTimeout,
 	}
 	if dbPath == "" {
-		return r, nil
+		return t, nil
 	}
 
 	var err error
-	r.db, err = sql.Open("sqlite3", dbPath)
+	t.db, err = bbolt.Open(dbPath, 0600, &bbolt.Options{Timeout: queryTimeout})
 	if err != nil {
 		return nil, errors.Join(errors.New("unable to create DB connection"), err)
 	}
-	r.persistent = true
 
-	err = r.initSchema()
+	err = t.initSchema()
 	if err != nil {
 		return nil, errors.Join(errors.New("unable to init DB schema"), err)
 	}
 
-	err = r.prepareQueries()
-	if err != nil {
-		return nil, errors.Join(errors.New("unable to prepare DB queries"), err)
-	}
-
-	return r, nil
+	t.persistent = true
+	return t, nil
 }
 
 func (r *dbWrap) Close() {
@@ -77,11 +68,13 @@ func (r *dbWrap) SetLastLaunch(taskName string, lastLaunch time.Time) error {
 	}
 
 	ts := lastLaunch.Unix()
-
-	ctx, cancel := r.context()
-	defer cancel()
-
-	_, err := r.setLastLaunchQuery.ExecContext(ctx, taskName, ts)
+	err := r.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(lastLaunchTimeBucket)
+		if bucket == nil {
+			return errors.New("nil bucket")
+		}
+		return bucket.Put([]byte(taskName), []byte(strconv.FormatInt(ts, 10)))
+	})
 	if err != nil {
 		return errors.Join(fmt.Errorf("unable to set last call time for %s", taskName), err)
 	}
@@ -95,154 +88,36 @@ func (r *dbWrap) GetLastLaunch(taskName string) (*time.Time, error) {
 		return &zeroTime, nil
 	}
 
-	ctx, cancel := r.context()
-	defer cancel()
+	var byteRes []byte
+	err := r.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(lastLaunchTimeBucket)
+		if bucket == nil {
+			return errors.New("nil bucket")
+		}
+		byteRes = bucket.Get([]byte(taskName))
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to get last call time from DB for %s", taskName), err)
+	}
 
-	res := r.getLastLaunchQuery.QueryRowContext(ctx, taskName)
-	if err := res.Err(); err != nil {
-		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
+	if byteRes == nil {
+		return &zeroTime, nil
 	}
 
 	var ts int64
-	if err := res.Scan(&ts); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return &zeroTime, nil
-		}
-		return nil, errors.Join(fmt.Errorf("unable to get last call time for %s", taskName), err)
+	ts, err = strconv.ParseInt(string(byteRes), 10, 64)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("unable to convert last call ts for %s", taskName), err)
 	}
 
 	tm := time.Unix(ts, 0)
 	return &tm, nil
 }
 
-func (r *dbWrap) SetExactTimeConfig(taskName string, tm ExactLaunchTime) error {
-	if !r.persistent {
-		r.logger.Warn("DB is not persistent, not exec SetExactTimeConfig")
-		return nil
-	}
-
-	ctx, cancel := r.context()
-	defer cancel()
-
-	_, err := r.setExactTimeConfigQuery.ExecContext(ctx, taskName, tm.Hour, tm.Minute, tm.Second)
-	if err != nil {
-		return errors.Join(fmt.Errorf("unable to set exact time config for %s", taskName), err)
-	}
-
-	return nil
-}
-
-func (r *dbWrap) GetExactTimeConfig(taskName string) (*ExactLaunchTime, error) {
-	if !r.persistent {
-		r.logger.Warn("DB is not persistent, not exec GetExactTimeConfig")
-		return nil, nil
-	}
-
-	ctx, cancel := r.context()
-	defer cancel()
-
-	res := r.getExactTimeConfigQuery.QueryRowContext(ctx, taskName)
-	if err := res.Err(); err != nil {
-		return nil, errors.Join(fmt.Errorf("unable to get exact time config for %s", taskName), err)
-	}
-
-	var tm ExactLaunchTime
-	if err := res.Scan(&tm.Hour, &tm.Minute, &tm.Second); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, errors.Join(fmt.Errorf("unable to get exact time config for %s", taskName), err)
-	}
-	return &tm, nil
-}
-
 func (r *dbWrap) initSchema() error {
-	if !r.persistent {
-		return nil
-	}
-
-	initQueries := []string{
-		`
-		CREATE TABLE IF NOT EXISTS LastLaunches (
-		    TaskName TEXT NOT NULL PRIMARY KEY,
-		    Ts INTEGER NOT NULL
-		)
-		`,
-		`
-		CREATE TABLE IF NOT EXISTS ExactTimeConfigs (
-			TaskName TEXT NOT NULL PRIMARY KEY,
-		    Hour INTEGER NOT NULL,
-		    Minute INTEGER NOT NULL,
-		    Second INTEGER NOT NULL
-		)
-		`,
-	}
-
-	ctx, cancel := r.context()
-	defer cancel()
-
-	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
+	return r.db.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(lastLaunchTimeBucket)
 		return err
-	}
-
-	for _, query := range initQueries {
-		_, err := tx.Exec(query)
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				return errors.Join(err, rbErr)
-			}
-			return err
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return errors.Join(err, rbErr)
-		}
-		return err
-	}
-	return nil
-}
-
-func (r *dbWrap) prepareQueries() error {
-	if !r.persistent {
-		return nil
-	}
-
-	ctx, cancel := r.context()
-	defer cancel()
-
-	var st *sql.Stmt
-	var err error
-
-	st, err = r.db.PrepareContext(ctx, "REPLACE INTO LastLaunches (TaskName, Ts) VALUES (?, ?)")
-	if err != nil {
-		return err
-	}
-	r.setLastLaunchQuery = st
-
-	st, err = r.db.PrepareContext(ctx, "SELECT Ts FROM LastLaunches WHERE TaskName=?")
-	if err != nil {
-		return err
-	}
-	r.getLastLaunchQuery = st
-
-	st, err = r.db.PrepareContext(ctx, "REPLACE INTO ExactTimeConfigs (TaskName, Hour, Minute, Second) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	r.setExactTimeConfigQuery = st
-
-	st, err = r.db.PrepareContext(ctx, "SELECT Hour, Minute, Second FROM ExactTimeConfigs WHERE TaskName=?")
-	if err != nil {
-		return err
-	}
-	r.getExactTimeConfigQuery = st
-
-	return nil
-}
-
-func (r *dbWrap) context() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), r.queryTimeout)
+	})
 }

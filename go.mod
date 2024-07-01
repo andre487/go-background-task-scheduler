@@ -2,4 +2,6 @@ module github.com/andre487/go-background-task-scheduler
 
 go 1.22.2
 
-require github.com/mattn/go-sqlite3 v1.14.22
+require go.etcd.io/bbolt v1.3.10
+
+require golang.org/x/sys v0.4.0 // indirect

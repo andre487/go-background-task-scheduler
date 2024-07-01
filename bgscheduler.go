@@ -58,7 +58,9 @@ type Task func() error
 type Scheduler struct {
 	logger       *logWrap
 	db           *dbWrap
-	run          bool
+	shouldRun    bool
+	running      bool
+	runWg        sync.WaitGroup
 	closed       bool
 	scanInterval time.Duration
 
@@ -86,7 +88,7 @@ func NewScheduler(conf *Config) (*Scheduler, error) {
 	}
 
 	t := Scheduler{
-		run:            true,
+		shouldRun:      true,
 		scanInterval:   conf.ScanInterval,
 		logger:         logger,
 		db:             db,
@@ -98,11 +100,11 @@ func NewScheduler(conf *Config) (*Scheduler, error) {
 	return &t, nil
 }
 
-func MustNewScheduler(conf *Config) *Scheduler {
+func MustCreateNewScheduler(conf *Config) *Scheduler {
 	return must1(NewScheduler(conf))
 }
 
-func (r *Scheduler) ScheduleWithInterval(taskName string, interval time.Duration, task Task) error {
+func (r *Scheduler) ScheduleIntervalTask(taskName string, interval time.Duration, task Task) error {
 	r.ensureNotClosed()
 	if interval < MinInterval {
 		interval = MinInterval
@@ -122,20 +124,18 @@ func (r *Scheduler) ScheduleWithInterval(taskName string, interval time.Duration
 	return nil
 }
 
-func (r *Scheduler) MustScheduleWithInterval(taskName string, interval time.Duration, task Task) {
-	must0(r.ScheduleWithInterval(taskName, interval, task))
+func (r *Scheduler) MustScheduleIntervalTask(taskName string, interval time.Duration, task Task) {
+	must0(r.ScheduleIntervalTask(taskName, interval, task))
 }
 
-func (r *Scheduler) RemoveTaskWithInterval(taskName string) {
+func (r *Scheduler) RemoveIntervalTask(taskName string) {
 	if r.existingTasks[taskName] {
 		delete(r.intervalTasks, taskName)
 		delete(r.existingTasks, taskName)
 	}
 }
 
-func (r *Scheduler) ScheduleWithExactTime(taskName string, exactLaunchTime ExactLaunchTime, task Task) error {
-	log.Fatalln("WIP")
-
+func (r *Scheduler) ScheduleExactTimeTask(taskName string, exactLaunchTime ExactLaunchTime, task Task) error {
 	r.ensureNotClosed()
 	if exactLaunchTime.Zero() {
 		return errors.Join(SchedulerError, fmt.Errorf("zero ExactLaunchTime for task %s", taskName))
@@ -154,11 +154,11 @@ func (r *Scheduler) ScheduleWithExactTime(taskName string, exactLaunchTime Exact
 	return nil
 }
 
-func (r *Scheduler) MustScheduleWithExactTime(taskName string, exactLaunchTime ExactLaunchTime, task Task) {
-	must0(r.ScheduleWithExactTime(taskName, exactLaunchTime, task))
+func (r *Scheduler) MustScheduleExactTimeTask(taskName string, exactLaunchTime ExactLaunchTime, task Task) {
+	must0(r.ScheduleExactTimeTask(taskName, exactLaunchTime, task))
 }
 
-func (r *Scheduler) RemoveTaskWithExactTime(taskName string) {
+func (r *Scheduler) RemoveExactTimeTask(taskName string) {
 	if r.existingTasks[taskName] {
 		delete(r.exactTimeTasks, taskName)
 		delete(r.existingTasks, taskName)
@@ -166,61 +166,66 @@ func (r *Scheduler) RemoveTaskWithExactTime(taskName string) {
 }
 
 func (r *Scheduler) Run(errChan chan TaskErrorWrapper) {
+	if r.running {
+		panic("try to Run already running Scheduler")
+	}
+	r.runWg.Add(1)
+
 	r.ensureNotClosed()
+	r.running = true
+	r.shouldRun = true
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	r.run = true
+	for r.shouldRun {
+		time.Sleep(r.scanInterval)
+		if !r.shouldRun {
+			break
+		}
 
-	go func() {
-		for r.run {
-			time.Sleep(r.scanInterval)
-			if !r.run {
+		for taskName, taskData := range r.intervalTasks {
+			if !r.shouldRun {
 				break
 			}
-			for taskName, taskData := range r.intervalTasks {
-				if !r.run {
-					break
-				}
-				r.runTaskWithInterval(taskName, taskData, errChan)
-			}
+			r.runIntervalTask(taskName, taskData, errChan)
 		}
-		wg.Done()
-	}()
 
-	go func() {
-		for r.run {
-			time.Sleep(r.scanInterval)
-			if !r.run {
+		for taskName, taskData := range r.exactTimeTasks {
+			if !r.shouldRun {
 				break
 			}
-			for taskName, taskData := range r.exactTimeTasks {
-				if !r.run {
-					break
-				}
-				r.runTaskWithExactTime(taskName, taskData, errChan)
-			}
+			r.runExactTimeTask(taskName, taskData, errChan)
 		}
-		wg.Done()
-	}()
+	}
 
-	wg.Wait()
 	if errChan != nil {
 		close(errChan)
 	}
+
+	r.runWg.Done()
+	r.running = false
+}
+
+func (r *Scheduler) Running() bool {
+	return r.running
 }
 
 func (r *Scheduler) Stop() {
-	r.run = false
+	r.shouldRun = false
+}
+
+func (r *Scheduler) Wait() {
+	r.runWg.Wait()
 }
 
 func (r *Scheduler) Close() {
+	r.Stop()
+
 	if r.closed {
+		r.Wait()
 		return
 	}
-
 	r.closed = true
-	r.Stop()
+
+	r.Wait()
 	if r.db.Persistent() {
 		r.db.Close()
 	}
@@ -244,7 +249,7 @@ func (r *Scheduler) ensureNotClosed() {
 	}
 }
 
-func (r *Scheduler) runTaskWithInterval(taskName string, taskData *intervalTaskData, errChan chan TaskErrorWrapper) {
+func (r *Scheduler) runIntervalTask(taskName string, taskData *intervalTaskData, errChan chan TaskErrorWrapper) {
 	if time.Now().Sub(*taskData.LastLaunchTime) < taskData.Interval {
 		return
 	}
@@ -273,8 +278,8 @@ func (r *Scheduler) runTaskWithInterval(taskName string, taskData *intervalTaskD
 	r.logger.Debug("Success for task %s", taskName)
 }
 
-func (r *Scheduler) runTaskWithExactTime(taskName string, taskData *exactTimeTaskData, errChan chan TaskErrorWrapper) {
-	if time.Now().Sub(*taskData.LastLaunchTime) < 0 {
+func (r *Scheduler) runExactTimeTask(taskName string, taskData *exactTimeTaskData, errChan chan TaskErrorWrapper) {
+	if taskData.UpdateTimeToLaunch() > 0 {
 		return
 	}
 
@@ -286,10 +291,9 @@ func (r *Scheduler) runTaskWithExactTime(taskName string, taskData *exactTimeTas
 		}
 	}
 
-	now := time.Now()
-	taskData.LastLaunchTime = &now
+	taskData.ResetAfterLaunch()
 	if r.db.Persistent() {
-		if err := r.db.SetLastLaunch(taskName, now); err != nil {
+		if err := r.db.SetLastLaunch(taskName, time.Now()); err != nil {
 			r.logger.Error("Error when storing last launch time for task %s: %s", taskName, err)
 			if errChan != nil {
 				errChan <- TaskErrorWrapper{

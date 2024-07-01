@@ -166,16 +166,15 @@ func TestExactTimeTaskData_Update_Reset(t *testing.T) {
 	}
 
 	tl0 := td.TimeToLaunch
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	tl := td.UpdateTimeToLaunch()
 	if tl != td.TimeToLaunch || tl >= tl0 {
 		t.Errorf("unexpected td.TimeToLaunch after update: %s", td.TimeToLaunch)
 	}
 
-	tl = td.ResetTimeToLaunch()
-
-	if tl != td.TimeToLaunch || tl <= 0 || tl > time.Second {
+	tl = td.ResetAfterLaunch()
+	if tl != td.TimeToLaunch || tl < 59*time.Second || tl > 61*time.Second {
 		t.Errorf("unexpected td.TimeToLaunch after reset: %s", td.TimeToLaunch)
 	}
 }

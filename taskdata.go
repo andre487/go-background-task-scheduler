@@ -61,7 +61,13 @@ func newExactTimeTaskData(exactLaunchTime ExactLaunchTime, task Task, lastLaunch
 	return r
 }
 
-func (r *exactTimeTaskData) ResetTimeToLaunch() time.Duration {
+func (r *exactTimeTaskData) ResetAfterLaunch() (timeToLaunch time.Duration) {
+	n := time.Now()
+	r.LastLaunchTime = &n
+	return r.ResetTimeToLaunch()
+}
+
+func (r *exactTimeTaskData) ResetTimeToLaunch() (timeToLaunch time.Duration) {
 	if r.ExactLaunchTime.Zero() {
 		panic("unexpected zero ExactLaunchTime")
 	}
@@ -117,8 +123,9 @@ func (r *exactTimeTaskData) ResetTimeToLaunch() time.Duration {
 	return r.TimeToLaunch
 }
 
-func (r *exactTimeTaskData) UpdateTimeToLaunch() time.Duration {
-	delta := time.Now().Sub(r.lastScanTime)
-	r.TimeToLaunch -= delta
+func (r *exactTimeTaskData) UpdateTimeToLaunch() (timeToLaunch time.Duration) {
+	now := time.Now()
+	r.TimeToLaunch -= now.Sub(r.lastScanTime)
+	r.lastScanTime = now
 	return r.TimeToLaunch
 }

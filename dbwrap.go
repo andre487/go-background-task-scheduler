@@ -10,30 +10,25 @@ import (
 )
 
 type dbWrap struct {
-	db           *bbolt.DB
-	logger       *logWrap
-	queryTimeout time.Duration
-	persistent   bool
+	db         *bbolt.DB
+	logger     *logWrap
+	persistent bool
 }
 
 var lastLaunchTimeBucket = []byte("lastLaunchTime")
 
-func newDbWrap(dbPath string, logger *logWrap, queryTimeout time.Duration) (*dbWrap, error) {
-	if queryTimeout < 500*time.Millisecond {
-		queryTimeout = 500 * time.Millisecond
-		logger.Debug("DB query timeout fell back to %s", queryTimeout)
-	}
+func newDbWrap(dbPath string, logger *logWrap) (*dbWrap, error) {
 	t := &dbWrap{
-		persistent:   false,
-		logger:       logger,
-		queryTimeout: queryTimeout,
+		persistent: false,
+		logger:     logger,
 	}
 	if dbPath == "" {
 		return t, nil
 	}
 
 	var err error
-	t.db, err = bbolt.Open(dbPath, 0600, &bbolt.Options{Timeout: queryTimeout})
+
+	t.db, err = bbolt.Open(dbPath, 0600, nil)
 	if err != nil {
 		return nil, errors.Join(errors.New("unable to create DB connection"), err)
 	}

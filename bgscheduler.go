@@ -46,11 +46,10 @@ type Logger interface {
 }
 
 type Config struct {
-	Logger         Logger
-	LogLevel       LogLevel
-	DbPath         string
-	DbQueryTimeout time.Duration
-	ScanInterval   time.Duration
+	Logger       Logger
+	LogLevel     LogLevel
+	DbPath       string
+	ScanInterval time.Duration
 }
 
 type Task func() error
@@ -82,7 +81,7 @@ func NewScheduler(conf *Config) (*Scheduler, error) {
 
 	logger := newLogWrap(conf.Logger, conf.LogLevel)
 
-	db, err := newDbWrap(conf.DbPath, logger, conf.DbQueryTimeout)
+	db, err := newDbWrap(conf.DbPath, logger)
 	if err != nil {
 		return nil, errors.Join(SchedulerError, err)
 	}

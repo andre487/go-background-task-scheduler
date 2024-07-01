@@ -8,7 +8,7 @@ import (
 func TestDbWrap_LastLaunch(t *testing.T) {
 	dbPath := createDbPath(t)
 
-	db, err := newDbWrap(dbPath, createLogger(), 10*time.Second)
+	db, err := newDbWrap(dbPath, createLogger())
 	if err != nil {
 		t.Fatal(err)
 	}

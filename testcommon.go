@@ -20,5 +20,5 @@ func createLogger() *logWrap {
 
 func createDbPath(t *testing.T) string {
 	dbDir := t.TempDir()
-	return path.Join(dbDir, "db.sqlite")
+	return path.Join(dbDir, "data.db")
 }

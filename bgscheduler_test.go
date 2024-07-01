@@ -37,7 +37,7 @@ func TestScheduler_MustScheduleIntervalTask_Persistent_NoErrChan(t *testing.T) {
 		t.Errorf("unexpected errExecTime diff: %s", now.Sub(successExecTime))
 	}
 
-	db := must1(newDbWrap(dbPath, createLogger(), 10*time.Second))
+	db := must1(newDbWrap(dbPath, createLogger()))
 	successDbLastTime := must1(db.GetLastLaunch("SuccessfulTask"))
 	errLastTime := must1(db.GetLastLaunch("ErrTask"))
 
@@ -128,7 +128,7 @@ func TestScheduler_MustScheduleExactTimeTask_Persistent_NoErrChan(t *testing.T) 
 		t.Errorf("unexpected errExecTime diff: %s", now1.Sub(successExecTime))
 	}
 
-	db := must1(newDbWrap(dbPath, createLogger(), 10*time.Second))
+	db := must1(newDbWrap(dbPath, createLogger()))
 	successDbLastTime := must1(db.GetLastLaunch("SuccessfulTask"))
 	errLastTime := must1(db.GetLastLaunch("ErrTask"))
 

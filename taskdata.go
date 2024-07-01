@@ -47,6 +47,7 @@ type exactTimeTaskData struct {
 	TimeToLaunch   time.Duration
 
 	intervalType exactTimeInterval
+	lastScanTime time.Time
 }
 
 func newExactTimeTaskData(exactLaunchTime ExactLaunchTime, task Task, lastLaunchTime *time.Time) *exactTimeTaskData {
@@ -54,12 +55,13 @@ func newExactTimeTaskData(exactLaunchTime ExactLaunchTime, task Task, lastLaunch
 		ExactLaunchTime: exactLaunchTime,
 		Task:            task,
 		LastLaunchTime:  lastLaunchTime,
+		lastScanTime:    time.Now(),
 	}
-	r.initTimeToLaunch()
+	r.ResetTimeToLaunch()
 	return r
 }
 
-func (r *exactTimeTaskData) initTimeToLaunch() {
+func (r *exactTimeTaskData) ResetTimeToLaunch() time.Duration {
 	if r.ExactLaunchTime.Zero() {
 		panic("unexpected zero ExactLaunchTime")
 	}
@@ -112,4 +114,11 @@ func (r *exactTimeTaskData) initTimeToLaunch() {
 	}
 
 	r.TimeToLaunch = nextTimeDelta
+	return r.TimeToLaunch
+}
+
+func (r *exactTimeTaskData) UpdateTimeToLaunch() time.Duration {
+	delta := time.Now().Sub(r.lastScanTime)
+	r.TimeToLaunch -= delta
+	return r.TimeToLaunch
 }

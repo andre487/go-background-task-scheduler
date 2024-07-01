@@ -154,6 +154,32 @@ func TestExactTimeTaskData_Init_Minutely(t *testing.T) {
 	}
 }
 
+func TestExactTimeTaskData_Update_Reset(t *testing.T) {
+	td := newExactTimeTaskData(ExactLaunchTime{
+		Hour:   -1,
+		Minute: -1,
+		Second: time.Now().Add(time.Second).Second(),
+	}, task, &zeroTime)
+
+	if (td.TimeToLaunch - time.Second).Abs() > time.Minute {
+		t.Fatalf("unexpected time for launch in the future: %s", td.TimeToLaunch)
+	}
+
+	tl0 := td.TimeToLaunch
+	time.Sleep(10 * time.Millisecond)
+
+	tl := td.UpdateTimeToLaunch()
+	if tl != td.TimeToLaunch || tl >= tl0 {
+		t.Errorf("unexpected td.TimeToLaunch after update: %s", td.TimeToLaunch)
+	}
+
+	tl = td.ResetTimeToLaunch()
+
+	if tl != td.TimeToLaunch || tl <= 0 || tl > time.Second {
+		t.Errorf("unexpected td.TimeToLaunch after reset: %s", td.TimeToLaunch)
+	}
+}
+
 func task() error {
 	return nil
 }

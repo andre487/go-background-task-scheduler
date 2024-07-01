@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-var zeroTime = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+const zeroYear = 1970
+
+var zeroTime = time.Date(zeroYear, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func must0(err error) {
 	if err != nil {

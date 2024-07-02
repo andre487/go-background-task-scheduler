@@ -1,6 +1,7 @@
 # Go background task scheduler
 
 [![Run commit tests](https://github.com/andre487/go-background-task-scheduler/actions/workflows/main-tests.yml/badge.svg?branch=main)](https://github.com/andre487/go-background-task-scheduler/actions/workflows/main-tests.yml)
+[![Test coverage](https://andre487.github.io/gh-content/badges/andre487/go-background-task-scheduler/main/test-coverage.svg)](https://github.com/andre487/go-background-task-scheduler/actions/workflows/main-tests.yml)
 
 Package for task scheduling inside a process.
 Supports interval tasks and tasks that should be executed at exact time.

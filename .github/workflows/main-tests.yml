@@ -1,0 +1,27 @@
+name: Run commit tests
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=.
+
+    - name: Handle test coverage
+      uses: vladopajic/go-test-coverage@v2
+      with:
+        profile: cover.out

@@ -17,7 +17,7 @@ go get github.com/andre487/go-background-task-scheduler
 
 ## Documentation
 
-[Documentation](https://pkg.go.dev/github.com/andre487/go-background-task-scheduler)
+[Documentation](https://pkg.go.dev/github.com/andre487/go-background-task-scheduler#section-documentation)
 on pkg.go.dev
 
 ## Very basic example

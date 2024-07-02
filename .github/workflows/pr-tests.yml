@@ -1,4 +1,4 @@
-name: Run commit tests
+name: Run pull request tests
 
 on:
   pull_request:

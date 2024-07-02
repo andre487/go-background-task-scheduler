@@ -1,20 +1,3 @@
-# Go background task scheduler
-
-Package for task scheduling inside a process.
-Supports interval tasks and tasks that should be executed at exact time.
-
-Supports persistence with [bbolt](https://github.com/etcd-io/bbolt), 
-intervals can be preserved between application launches.
-
-## Installation
-
-```shell
-go get github.com/andre487/go-background-task-scheduler
-```
-
-## Very basic example
-
-```go
 package main
 
 import (
@@ -27,6 +10,7 @@ import (
 
 func main() {
 	now := time.Now()
+	after5Seconds := now.Add(5 * time.Second)
 	after20Seconds := now.Add(20 * time.Second)
 
 	// Scheduler config with persistence
@@ -57,6 +41,46 @@ func main() {
 	}
 
 	// Scheduling an exact time task
+	// It will be executed every day at Hour, Minute, Second
+	err = scheduler.ScheduleExactTimeTask(
+		"DailyMail",
+		bgscheduler.ExactLaunchTime{
+			Hour:   after5Seconds.Hour(),
+			Minute: after5Seconds.Minute(),
+			Second: after5Seconds.Second(),
+		},
+		func() error {
+			err := SendMail()
+			if err == nil {
+				log.Println("Daily mail has been sent")
+			}
+			return err
+		},
+	)
+	if err != nil {
+		log.Fatalf("Unable schedule DailyMail: %s\n", err)
+	}
+
+	// Scheduling an exact time task
+	// It will be executed every hour at Minute, Second
+	// If something go wrong panic will be raised
+	scheduler.MustScheduleExactTimeTask(
+		"HourlyMail",
+		bgscheduler.ExactLaunchTime{
+			Hour:   -1,
+			Minute: after20Seconds.Minute(),
+			Second: after20Seconds.Second(),
+		},
+		func() error {
+			err := SendMail()
+			if err == nil {
+				log.Println("Hourly mail has been sent")
+			}
+			return err
+		},
+	)
+
+	// Scheduling an exact time task
 	// It will be executed every minute at Second
 	// If something goes wrong, panic will be raised.
 	// An error that returned from the task will be printed to log every execution
@@ -79,8 +103,7 @@ func main() {
 	// Running for 5 minutes
 	time.Sleep(5 * time.Minute)
 }
-```
 
-## More examples
-
-More examples can be found in [examples](examples) directory.
+func SendMail() error {
+	return nil
+}

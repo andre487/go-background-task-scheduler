@@ -1,5 +1,5 @@
 // Package bgscheduler implements background task scheduler.
-// The [NewScheduler] function creates new scheduler with [Config] params.
+// The [NewScheduler] function creates a new scheduler with [Config] params.
 // The [MustCreateNewScheduler] function does the same, but doesn't return an error,
 // but panics when error occurs.
 // Internal errors of package have SchedulerError error instance in the chain.
@@ -82,11 +82,14 @@ type Scheduler struct {
 
 // NewScheduler produces Scheduler instance, returns pointer to this and an error if occurred
 func NewScheduler(conf *Config) (*Scheduler, error) {
+	if conf == nil {
+		conf = &Config{}
+	}
 	if conf.Logger == nil {
 		conf.Logger = log.Default()
 	}
 	if conf.LogLevel == 0 {
-		conf.LogLevel = LogLevelError
+		conf.LogLevel = LogLevelWarn
 	}
 	if conf.ScanInterval == 0 {
 		conf.ScanInterval = DefaultScanInterval
@@ -182,7 +185,7 @@ func (r *Scheduler) MustScheduleExactTimeTask(taskName string, exactLaunchTime E
 	must0(r.ScheduleExactTimeTask(taskName, exactLaunchTime, task))
 }
 
-// RemoveExactTimeTask removes task from exact time tasks queue
+// RemoveExactTimeTask removes a task from exact time tasks queue
 func (r *Scheduler) RemoveExactTimeTask(taskName string) {
 	if r.existingTasks[taskName] {
 		delete(r.exactTimeTasks, taskName)
@@ -194,6 +197,7 @@ func (r *Scheduler) RemoveExactTimeTask(taskName string) {
 // Should be called in the goroutine.
 // errChan is an optional param (can be nil) that can be used for
 // retrieving errors from tasks
+// Can't be called several times, on second call panic will be raised.
 func (r *Scheduler) Run(errChan chan TaskErrorWrapper) {
 	if r.running {
 		panic("try to Run already running Scheduler")
@@ -241,6 +245,7 @@ func (r *Scheduler) Running() bool {
 // Stop tasks handling after Run.
 // Run can be called after this method.
 // It launches task handling again.
+// Can be called several times.
 func (r *Scheduler) Stop() {
 	r.shouldRun = false
 }
@@ -250,7 +255,8 @@ func (r *Scheduler) Wait() {
 	r.runWg.Wait()
 }
 
-// Close stops scheduler, closes DB and waits for execution stop
+// Close stops scheduler, closes DB and waits for execution stop.
+// Can be called several times.
 func (r *Scheduler) Close() {
 	r.Stop()
 

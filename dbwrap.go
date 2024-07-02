@@ -3,6 +3,8 @@ package bgscheduler
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"strconv"
 	"time"
 
@@ -27,6 +29,18 @@ func newDbWrap(dbPath string, logger *logWrap) (*dbWrap, error) {
 	}
 
 	var err error
+
+	dbDir := path.Dir(dbPath)
+	_, err = os.Stat(dbDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(dbDir, 0755); err != nil {
+				return nil, errors.Join(errors.New("unable to create DB directory"), err)
+			}
+		} else {
+			return nil, errors.Join(errors.New("unable to check DB directory"), err)
+		}
+	}
 
 	t.db, err = bbolt.Open(dbPath, 0600, nil)
 	if err != nil {

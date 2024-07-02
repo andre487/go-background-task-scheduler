@@ -12,6 +12,11 @@ intervals can be preserved between application launches.
 go get github.com/andre487/go-background-task-scheduler
 ```
 
+## Documentation
+
+[Documentation](https://pkg.go.dev/github.com/andre487/go-background-task-scheduler)
+on pkg.go.dev
+
 ## Very basic example
 
 ```go

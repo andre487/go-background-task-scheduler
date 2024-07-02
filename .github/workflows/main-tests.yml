@@ -25,3 +25,7 @@ jobs:
       uses: vladopajic/go-test-coverage@v2
       with:
         profile: cover.out
+        git-token: ${{ github.ref_name == 'main' && secrets.GH_TOKEN || '' }}
+        git-branch: main
+        git-repository: andre487/gh-content
+        git-file-name: badges/${{ github.repository }}/${{ github.ref_name }}/test-coverage.svg
